@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 import torch.optim as optim
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
@@ -159,14 +160,16 @@ if __name__ == '__main__':
     NUM_BATCH_WARM_UP = len(train_loader) * NUM_EPOCH_WARM_UP  # use the first 1/25 epochs to warm up
     batch = 0  # batch index
 
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(OPTIMIZER, mode='max', patience=5, min_lr=4e-5)
+
     for epoch in range(NUM_EPOCH): # start training process
         
-        if epoch == STAGES[0]: # adjust LR for each training stage after warm up, you can also choose to adjust LR manually (with slight modification) once plaueau observed
-            schedule_lr(OPTIMIZER)
-        if epoch == STAGES[1]:
-            schedule_lr(OPTIMIZER)
-        if epoch == STAGES[2]:
-            schedule_lr(OPTIMIZER)
+        # if epoch == STAGES[0]: # adjust LR for each training stage after warm up, you can also choose to adjust LR manually (with slight modification) once plaueau observed
+        #     schedule_lr(OPTIMIZER)
+        # if epoch == STAGES[1]:
+        #     schedule_lr(OPTIMIZER)
+        # if epoch == STAGES[2]:
+        #     schedule_lr(OPTIMIZER)
 
         BACKBONE.train()  # set to training mode
         HEAD.train()
@@ -175,7 +178,10 @@ if __name__ == '__main__':
         top1 = AverageMeter()
         top5 = AverageMeter()
 
-        for inputs, labels in tqdm(iter(train_loader)):
+        for i, (inputs, labels) in tqdm(enumerate(iter(train_loader))):
+
+            if i > 100:
+                break
 
             if (epoch + 1 <= NUM_EPOCH_WARM_UP) and (batch + 1 <= NUM_BATCH_WARM_UP): # adjust LR for each training batch during warm up
                 warm_up_lr(batch + 1, NUM_BATCH_WARM_UP, LR, OPTIMIZER)
@@ -241,8 +247,13 @@ if __name__ == '__main__':
         buffer_val(writer, "CPLFW", accuracy_cplfw, best_threshold_cplfw, roc_curve_cplfw, epoch + 1)
         accuracy_vgg2_fp, best_threshold_vgg2_fp, roc_curve_vgg2_fp = perform_val(MULTI_GPU, DEVICE, EMBEDDING_SIZE, BATCH_SIZE, BACKBONE, vgg2_fp, vgg2_fp_issame)
         buffer_val(writer, "VGGFace2_FP", accuracy_vgg2_fp, best_threshold_vgg2_fp, roc_curve_vgg2_fp, epoch + 1)
-        print("Epoch {}/{}, Evaluation: LFW Acc: {}, CFP_FF Acc: {}, CFP_FP Acc: {}, AgeDB Acc: {}, CALFW Acc: {}, CPLFW Acc: {}, VGG2_FP Acc: {}".format(epoch + 1, NUM_EPOCH, accuracy_lfw, accuracy_cfp_ff, accuracy_cfp_fp, accuracy_agedb, accuracy_calfw, accuracy_cplfw, accuracy_vgg2_fp))
+        test_acc = np.mean([accuracy_lfw, accuracy_cfp_ff, accuracy_cfp_fp, accuracy_agedb, accuracy_calfw, accuracy_cplfw, accuracy_vgg2_fp])
+
+        print("Epoch {}/{}, Evaluation: LFW Acc: {}, CFP_FF Acc: {}, CFP_FP Acc: {}, AgeDB Acc: {}, CALFW Acc: {}, CPLFW Acc: {}, VGG2_FP Acc: {}, MEAN Acc: {}".format(epoch + 1, NUM_EPOCH, accuracy_lfw, accuracy_cfp_ff, accuracy_cfp_fp, accuracy_agedb, accuracy_calfw, accuracy_cplfw, accuracy_vgg2_fp, test_acc))
         print("=" * 60)
+
+        scheduler.step(test_acc)
+
 
         # save checkpoints per epoch
         if MULTI_GPU:
