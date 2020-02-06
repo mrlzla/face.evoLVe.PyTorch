@@ -8,6 +8,7 @@ import torchvision.datasets as datasets
 from config import configurations
 from backbone.model_resnet import ResNet_50, ResNet_101, ResNet_152
 from backbone.model_irse import IR_50, IR_101, IR_152, IR_SE_50, IR_SE_101, IR_SE_152
+from backbone.model_shufflenet import shufflenet_v2_x0_5, shufflenet_v2_x1_0, shufflenet_v2_x1_5, shufflenet_v2_x2_0
 from head.metrics import ArcFace, CosFace, SphereFace, Am_softmax
 from loss.focal import FocalLoss
 from util.utils import make_weights_for_balanced_classes, get_val_data, separate_irse_bn_paras, separate_resnet_bn_paras, warm_up_lr, schedule_lr, perform_val, get_time, buffer_val, AverageMeter, accuracy
@@ -95,7 +96,12 @@ if __name__ == '__main__':
                      'IR_152': IR_152(INPUT_SIZE),
                      'IR_SE_50': IR_SE_50(INPUT_SIZE), 
                      'IR_SE_101': IR_SE_101(INPUT_SIZE), 
-                     'IR_SE_152': IR_SE_152(INPUT_SIZE)}
+                     'IR_SE_152': IR_SE_152(INPUT_SIZE),
+                     'ShuffleNetV2_0.5': shufflenet_v2_x0_5(pretrained=True, only_features=True),
+                     'ShuffleNetV2_1.0': shufflenet_v2_x1_0(pretrained=True, only_features=True),
+                     'ShuffleNetV2_1.5': shufflenet_v2_x1_5(pretrained=False, only_features=True),
+                     'ShuffleNetV2_2.0': shufflenet_v2_x2_0(pretrained=False, only_features=True),
+                     }
     BACKBONE = BACKBONE_DICT[BACKBONE_NAME]
     print("=" * 60)
     print(BACKBONE)
@@ -120,7 +126,7 @@ if __name__ == '__main__':
     print("{} Loss Generated".format(LOSS_NAME))
     print("=" * 60)
 
-    if BACKBONE_NAME.find("IR") >= 0:
+    if BACKBONE_NAME.startswith("IR") or BACKBONE_NAME.startswith("ShuffleNetV2"):
         backbone_paras_only_bn, backbone_paras_wo_bn = separate_irse_bn_paras(BACKBONE) # separate batch_norm parameters from others; do not do weight decay for batch_norm parameters to improve the generalizability
         _, head_paras_wo_bn = separate_irse_bn_paras(HEAD)
     else:
@@ -178,10 +184,7 @@ if __name__ == '__main__':
         top1 = AverageMeter()
         top5 = AverageMeter()
 
-        for i, (inputs, labels) in tqdm(enumerate(iter(train_loader))):
-
-            if i > 100:
-                break
+        for inputs, labels in enumerate(iter(train_loader)):
 
             if (epoch + 1 <= NUM_EPOCH_WARM_UP) and (batch + 1 <= NUM_BATCH_WARM_UP): # adjust LR for each training batch during warm up
                 warm_up_lr(batch + 1, NUM_BATCH_WARM_UP, LR, OPTIMIZER)
