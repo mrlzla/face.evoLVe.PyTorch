@@ -151,6 +151,13 @@ def _shufflenetv2(arch, pretrained, progress, *args, **kwargs):
             raise NotImplementedError('pretrained {} is not supported as of now'.format(arch))
         else:
             state_dict = load_state_dict_from_url(model_url, progress=progress)
+            if args[1][-1] == 512:
+                print("DELETE UNAPPROPRIATE WEIGHTS")
+                del state_dict['conv5.0.weight']
+                del state_dict['conv5.1.weight']
+                del state_dict['conv5.1.bias']
+                del state_dict['conv5.1.running_mean']
+                del state_dict['conv5.1.running_var']
             model.load_state_dict(state_dict, strict=False)
 
     return model
@@ -179,7 +186,7 @@ def shufflenet_v2_x1_0(pretrained=False, progress=True, **kwargs):
         progress (bool): If True, displays a progress bar of the download to stderr
     """
     return _shufflenetv2('shufflenetv2_x1.0', pretrained, progress,
-                         [4, 8, 4], [24, 116, 232, 464, 1024], **kwargs)
+                         [4, 8, 4], [24, 116, 232, 464, 512], **kwargs)
 
 
 def shufflenet_v2_x1_5(pretrained=False, progress=True, **kwargs):
