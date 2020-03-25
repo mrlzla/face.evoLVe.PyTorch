@@ -163,6 +163,10 @@ class ResNet(Module):
 
         return x
 
+def ResNet_18(input_size, **kwargs):
+    model = ResNet(input_size, BasicBlock, [2, 2, 2, 2], **kwargs)
+    return model
+
 
 def ResNet_50(input_size, **kwargs):
     """Constructs a ResNet-50 model.
