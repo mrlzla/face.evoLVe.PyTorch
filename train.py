@@ -7,8 +7,9 @@ import torchvision.datasets as datasets
 
 from config import configurations
 from backbone.model_resnet import ResNet_50, ResNet_101, ResNet_152
-from backbone.model_irse import IR_50, IR_101, IR_152, IR_SE_50, IR_SE_101, IR_SE_152
+from backbone.model_irse import IR_50, IR_101, IR_152, IR_SE_50, IR_SE_101, IR_SE_152, MobileFaceNet
 from backbone.model_shufflenet import shufflenet_v2_x0_5, shufflenet_v2_x1_0, shufflenet_v2_x1_5, shufflenet_v2_x2_0
+from backbone.model_ghostnet import ghost_net
 from head.metrics import ArcFace, CosFace, SphereFace, Am_softmax
 from loss.focal import FocalLoss
 from util.utils import make_weights_for_balanced_classes, get_val_data, separate_irse_bn_paras, separate_resnet_bn_paras, warm_up_lr, schedule_lr, perform_val, get_time, buffer_val, AverageMeter, accuracy
@@ -98,9 +99,11 @@ if __name__ == '__main__':
                      'IR_SE_101': IR_SE_101(INPUT_SIZE), 
                      'IR_SE_152': IR_SE_152(INPUT_SIZE),
                      'ShuffleNetV2_0.5': shufflenet_v2_x0_5(pretrained=True, only_features=True),
-                     'ShuffleNetV2_1.0': shufflenet_v2_x1_0(pretrained=True, only_features=True),
+                     'ShuffleNetV2_1.0': shufflenet_v2_x1_0(pretrained=False, only_features=True),
                      'ShuffleNetV2_1.5': shufflenet_v2_x1_5(pretrained=False, only_features=True),
                      'ShuffleNetV2_2.0': shufflenet_v2_x2_0(pretrained=False, only_features=True),
+                     'GhostNet': ghost_net(),
+                     'MobileFaceNet': MobileFaceNet(512)
                      }
     BACKBONE = BACKBONE_DICT[BACKBONE_NAME]
     print("=" * 60)
@@ -126,7 +129,7 @@ if __name__ == '__main__':
     print("{} Loss Generated".format(LOSS_NAME))
     print("=" * 60)
 
-    if BACKBONE_NAME.startswith("IR") or BACKBONE_NAME.startswith("ShuffleNetV2"):
+    if BACKBONE_NAME.startswith("IR") or BACKBONE_NAME.startswith("ShuffleNetV2") or BACKBONE_NAME.startswith("Ghost"):
         backbone_paras_only_bn, backbone_paras_wo_bn = separate_irse_bn_paras(BACKBONE) # separate batch_norm parameters from others; do not do weight decay for batch_norm parameters to improve the generalizability
         _, head_paras_wo_bn = separate_irse_bn_paras(HEAD)
     else:
@@ -166,7 +169,7 @@ if __name__ == '__main__':
     NUM_BATCH_WARM_UP = len(train_loader) * NUM_EPOCH_WARM_UP  # use the first 1/25 epochs to warm up
     batch = 0  # batch index
 
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(OPTIMIZER, mode='max', patience=5, min_lr=4e-5)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(OPTIMIZER, mode='max', patience=2, factor=0.1, min_lr=4e-5)
 
     for epoch in range(NUM_EPOCH): # start training process
         
@@ -176,6 +179,9 @@ if __name__ == '__main__':
         #     schedule_lr(OPTIMIZER)
         # if epoch == STAGES[2]:
         #     schedule_lr(OPTIMIZER)
+        
+        for param_group in OPTIMIZER.param_groups:
+            print("LR ", param_group['lr'])
 
         BACKBONE.train()  # set to training mode
         HEAD.train()
@@ -186,8 +192,8 @@ if __name__ == '__main__':
 
         for inputs, labels in tqdm(iter(train_loader)):
 
-            if (epoch + 1 <= NUM_EPOCH_WARM_UP) and (batch + 1 <= NUM_BATCH_WARM_UP): # adjust LR for each training batch during warm up
-                warm_up_lr(batch + 1, NUM_BATCH_WARM_UP, LR, OPTIMIZER)
+            #if (epoch + 1 <= NUM_EPOCH_WARM_UP) and (batch + 1 <= NUM_BATCH_WARM_UP): # adjust LR for each training batch during warm up
+            #    warm_up_lr(batch + 1, NUM_BATCH_WARM_UP, LR, OPTIMIZER)
 
             # compute output
             inputs = inputs.to(DEVICE)
